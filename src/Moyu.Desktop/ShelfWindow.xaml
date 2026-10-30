@@ -1,0 +1,39 @@
+<Window x:Class="Moyu.Desktop.ShelfWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="摸鱼阅读器 · 书架" Style="{StaticResource {x:Type Window}}" Width="820" Height="620" MinWidth="640" MinHeight="420" WindowStartupLocation="CenterScreen" AllowDrop="True">
+ <Grid Margin="30,25,30,20">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <Grid Margin="0,0,0,24"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <StackPanel><TextBlock Text="书架" FontSize="28" FontWeight="SemiBold"/><TextBlock Text="留一小块地方，读自己的书。" Margin="0,7,0,0" Foreground="#748078" FontSize="13"/></StackPanel>
+   <Button x:Name="ImportButton" Grid.Column="1" Content="＋ 导入书籍" Style="{StaticResource Primary}" VerticalAlignment="Center" Click="ImportClick"/>
+  </Grid>
+  <Grid Grid.Row="1" Margin="0,0,0,16"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid><TextBox x:Name="SearchBox" TextChanged="SearchChanged" AutomationProperties.Name="搜索书名"/>
+    <TextBlock Text="搜索书名" Foreground="#8C968F" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+   </Grid>
+   <TextBlock Text="按最近阅读排序" Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="12" Foreground="#748078"/>
+  </Grid>
+  <Grid Grid.Row="2">
+   <ListBox x:Name="BooksList" BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" MouseDoubleClick="BookDoubleClick">
+    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0,0,0,8"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListBox.ItemContainerStyle>
+    <ListBox.ItemTemplate><DataTemplate>
+     <Border Background="White" BorderBrush="#E2E7E1" BorderThickness="1" CornerRadius="6" Padding="18,16">
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <Border Background="#EEF3ED" CornerRadius="3" Width="40" Height="48" VerticalAlignment="Center"><TextBlock Text="{Binding Format}" FontSize="10" Foreground="#557565" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+       <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,16,0"><TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Detail}" Foreground="#7B857F" FontSize="12" Margin="0,7,0,0"/></StackPanel>
+       <Button Grid.Column="2" Content="阅读" Padding="14,7" VerticalAlignment="Center" Margin="0,0,8,0" Click="ReadClick"/>
+       <Button Grid.Column="3" Content="移除" Padding="10,7" Background="Transparent" BorderThickness="0" Foreground="#7B857F" VerticalAlignment="Center" Click="RemoveClick"/>
+      </Grid>
+     </Border>
+    </DataTemplate></ListBox.ItemTemplate>
+   </ListBox>
+   <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False">
+    <TextBlock Text="从一本书开始" HorizontalAlignment="Center" FontSize="22" FontWeight="Medium"/>
+    <TextBlock x:Name="EmptyHint" Text="把 TXT 或 EPUB 拖到这里，或点击右上角导入。" Margin="0,12,0,0" Foreground="#7B857F"/>
+   </StackPanel>
+  </Grid>
+  <Grid Grid.Row="3" Margin="0,18,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <TextBlock x:Name="StatusText" Text="书籍和进度只保存在本机" VerticalAlignment="Center" FontSize="12" Foreground="#7B857F"/>
+   <Button Grid.Column="1" Content="设置" Padding="12,6" Background="Transparent" BorderThickness="0" Click="SettingsClick"/>
+  </Grid>
+ </Grid>
+</Window>
