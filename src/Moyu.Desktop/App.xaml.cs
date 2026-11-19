@@ -71,7 +71,7 @@ public partial class App : Application
     public void ShowShelf()
     {
         if (busy) return;
-        Reader.CaptureProgress(); Reader.Hide();
+        Reader.EndDrag(); Reader.CaptureProgress(); Reader.Hide();
         Store.Preferences.LastPage = "shelf";
         Shelf.Refresh(); Shelf.Show(); if (Shelf.WindowState == WindowState.Minimized) Shelf.WindowState = WindowState.Normal;
         Shelf.Activate(); SaveSoon();
@@ -79,6 +79,7 @@ public partial class App : Application
 
     public void HideCurrent()
     {
+        Reader.EndDrag();
         Reader.CaptureProgress();
         settings?.Close();
         foreach (var window in Windows.Cast<Window>().Where(w => w.Owner == Reader).ToArray()) window.Close();
