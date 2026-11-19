@@ -45,6 +45,36 @@ internal static class SmokeTests
             app.Reader.RestorePosition(after);
             await Pause();
             Check(Math.Abs(app.Reader.GetPosition().SymbolOffset - after.SymbolOffset) < 120, "改变宽度后保持正文锚点");
+            var reader = app.Reader;
+            var body = (RichTextBox)((Decorator)reader.Content).Child;
+            foreach (var edge in new[] { ResizeEdge.Right, ResizeEdge.Left | ResizeEdge.Top })
+            {
+                var anchor = reader.GetPosition();
+                var original = new ReaderBounds(reader.Left, reader.Top, reader.Width, reader.Height, body.Document.FontSize);
+                var size = body.RenderSize;
+                var bounds = ReaderGeometry.Resize(original, edge, 48, 36);
+                // Exercise the same gesture path, including the real capture-loss notification.
+                reader.CaptureMouse();
+                reader.BeginDrag(edge, new Point());
+                for (var step = 1; step <= 3; step++)
+                {
+                    reader.UpdateDrag(new Point(16 * step, 12 * step));
+                    reader.UpdateLayout();
+                    if (body.RenderSize != size || body.Document.FontSize != original.FontSize)
+                        throw new InvalidOperationException("拖动预览期间正文提前重排");
+                }
+                Check(Math.Abs(reader.ActualWidth - bounds.Width) <= 1 && body.RenderTransform.Value.M11 == bounds.FontSize / original.FontSize,
+                    $"{edge}：窗口跟随拖动，正文保持原排版");
+                await Task.Delay(1150); // Let a pending save run while the pointer is held still.
+                app.SaveNow();
+                Check(app.Store.Positions[book.Id].SymbolOffset == anchor.SymbolOffset && app.Store.Preferences.Width == original.Width,
+                    $"{edge}：停顿时不保存预览尺寸或临时进度");
+                if (edge == ResizeEdge.Right) reader.EndDrag(); else reader.ReleaseMouseCapture();
+                await Pause();
+                Check(body.RenderTransform.Value.IsIdentity && body.CacheMode is null && Math.Abs(body.ActualWidth - reader.ActualWidth) < 1
+                    && body.Document.FontSize == bounds.FontSize && Math.Abs(reader.GetPosition().SymbolOffset - anchor.SymbolOffset) < 120,
+                    $"{edge}：结束拖动后按最终尺寸排版并恢复阅读位置");
+            }
             app.HideCurrent();
             Check(!app.Reader.IsVisible && !app.Shelf.IsVisible, "隐藏无可见页面");
             app.RestoreCurrent();

@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Windows.Documents;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -16,7 +15,9 @@ public sealed class ReaderWindow : Window
     private ReaderBounds dragBounds;
     private ResizeEdge edge;
     private bool dragging;
-    private bool anchorQueued;
+    private readonly ResizeViewport viewport = new() { ClipToBounds = true };
+    private readonly ScaleTransform previewScale = new();
+    private ReaderBounds previewBounds;
     private bool loading;
     private ReadingPosition? resizeAnchor;
     public Book? CurrentBook { get; private set; }
@@ -50,16 +51,17 @@ public sealed class ReaderWindow : Window
         text.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         text.Cursor = Cursors.Arrow;
         text.SelectionBrush = Brushes.Transparent;
-        Content = text;
+        viewport.Child = text;
+        Content = viewport;
         text.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, _) =>
         {
-            if (!loading) { scrollSave.Stop(); scrollSave.Start(); }
+            if (!loading && resizeAnchor is null) { scrollSave.Stop(); scrollSave.Start(); }
         }));
         scrollSave.Tick += (_, _) => { scrollSave.Stop(); CaptureProgress(); app.SaveSoon(); };
         PreviewMouseLeftButtonDown += HandleMouseDown;
         PreviewMouseMove += HandleMouseMove;
         PreviewMouseLeftButtonUp += HandleMouseUp;
-        LostMouseCapture += (_, _) => { dragging = false; resizeAnchor = null; SaveBounds(); };
+        LostMouseCapture += (_, _) => { if (!IsMouseCaptured) EndDrag(); };
         PreviewMouseWheel += Wheel;
         ContextMenu = BuildMenu();
         text.ContextMenu = ContextMenu;
@@ -67,8 +69,12 @@ public sealed class ReaderWindow : Window
         DragOver += (_, e) => { e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; };
         Drop += async (_, e) => { if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) await app.ImportFiles(paths); };
         Closing += (_, e) => { if (!app.IsExiting) { e.Cancel = true; app.HideCurrent(); } };
-        LocationChanged += (_, _) => { if (!loading) { SaveBounds(); app.SaveSoon(); } };
-        SizeChanged += (_, _) => { UpdateImages(); if (!loading) { SaveBounds(); app.SaveSoon(); } };
+        LocationChanged += (_, _) => { if (!loading && !dragging) { SaveBounds(); app.SaveSoon(); } };
+        SizeChanged += (_, e) =>
+        {
+            if (resizeAnchor is null && e.WidthChanged) UpdateImages(e.NewSize.Width);
+            if (!loading && !dragging) { SaveBounds(); app.SaveSoon(); }
+        };
         ApplyAppearance(false);
     }
 
@@ -87,6 +93,7 @@ public sealed class ReaderWindow : Window
 
     public void LoadBook(Book book, BookContent content)
     {
+        EndDrag();
         loading = true;
         scrollSave.Stop();
         CurrentBook = book;
@@ -161,7 +168,7 @@ public sealed class ReaderWindow : Window
     public void CaptureProgress()
     {
         if (CurrentBook is null || loading || !IsLoaded || app.IsBusy || !app.Store.Books.Any(b => b.Id == CurrentBook.Id)) return;
-        app.Store.Positions[CurrentBook.Id] = GetPosition();
+        app.Store.Positions[CurrentBook.Id] = resizeAnchor ?? GetPosition();
     }
 
     public void ApplyAppearance(bool preservePosition = true)
@@ -179,16 +186,9 @@ public sealed class ReaderWindow : Window
         if (anchor != null) RestorePosition(anchor);
     }
 
-    private void QueueAnchor(ReadingPosition anchor)
+    private void UpdateImages(double width)
     {
-        if (anchorQueued) return;
-        anchorQueued = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { anchorQueued = false; RestorePosition(anchor); });
-    }
-
-    private void UpdateImages()
-    {
-        foreach (var image in images) image.MaxWidth = Math.Max(80, ActualWidth - 32);
+        foreach (var image in images) image.MaxWidth = Math.Max(80, width - 32);
     }
 
     private ResizeEdge HitEdge(Point point)
@@ -217,32 +217,70 @@ public sealed class ReaderWindow : Window
     {
         e.Handled = true;
         if (e.ClickCount == 2) { ReleaseMouseCapture(); app.HideCurrent(); return; }
-        edge = HitEdge(e.GetPosition(this));
-        dragOrigin = ScreenPoint(e);
-        dragBounds = new(Left, Top, Width, Height, app.Store.Preferences.FontSize);
-        resizeAnchor = edge == ResizeEdge.None ? null : GetPosition();
-        dragging = CaptureMouse();
+        if (CaptureMouse()) BeginDrag(HitEdge(e.GetPosition(this)), ScreenPoint(e));
+    }
+
+    internal void BeginDrag(ResizeEdge hit, Point origin)
+    {
+        edge = hit;
+        dragOrigin = origin;
+        dragBounds = previewBounds = new(Left, Top, Width, Height, app.Store.Preferences.FontSize);
+        dragging = true;
+        if (edge == ResizeEdge.None) return;
+        resizeAnchor = GetPosition();
+        scrollSave.Stop();
+        viewport.FreezeLayout(text.RenderSize);
+        if ((edge & (ResizeEdge.Left | ResizeEdge.Right)) != 0 && (edge & (ResizeEdge.Top | ResizeEdge.Bottom)) != 0)
+            text.CacheMode = new BitmapCache();
+        text.RenderTransform = previewScale;
+    }
+
+    internal void UpdateDrag(Point now)
+    {
+        if (!dragging) return;
+        var dx = now.X - dragOrigin.X; var dy = now.Y - dragOrigin.Y;
+        if (edge == ResizeEdge.None)
+        {
+            if (Math.Abs(dx) < 3 && Math.Abs(dy) < 3) return;
+            Left = dragBounds.Left + dx; Top = dragBounds.Top + dy;
+            return;
+        }
+        var bounds = ReaderGeometry.Resize(dragBounds, edge, dx, dy);
+        if (bounds == previewBounds) return;
+        previewBounds = bounds;
+        Left = bounds.Left; Top = bounds.Top; Width = bounds.Width; Height = bounds.Height;
+        previewScale.ScaleX = previewScale.ScaleY = bounds.FontSize / dragBounds.FontSize;
+    }
+
+    internal void EndDrag()
+    {
+        if (!dragging) return;
+        dragging = false;
+        if (resizeAnchor is { } anchor)
+        {
+            text.CacheMode = null;
+            text.RenderTransform = Transform.Identity;
+            previewScale.ScaleX = previewScale.ScaleY = 1;
+            viewport.ResumeLayout();
+            if (previewBounds.FontSize != dragBounds.FontSize)
+            {
+                var p = app.Store.Preferences;
+                text.Document.FontSize = p.FontSize = previewBounds.FontSize;
+                text.Document.LineHeight = p.FontSize * p.LineSpacing;
+            }
+            if (previewBounds.Width != dragBounds.Width) UpdateImages(Width);
+            if (previewBounds != dragBounds) RestorePosition(anchor);
+            resizeAnchor = null;
+        }
+        if (IsMouseCaptured) ReleaseMouseCapture();
+        SaveBounds(); app.SaveSoon();
     }
 
     private void HandleMouseMove(object sender, MouseEventArgs e)
     {
         if (dragging && e.LeftButton == MouseButtonState.Pressed)
         {
-            var now = ScreenPoint(e);
-            var dx = now.X - dragOrigin.X; var dy = now.Y - dragOrigin.Y;
-            if (edge == ResizeEdge.None)
-            {
-                if (Math.Abs(dx) < 3 && Math.Abs(dy) < 3) return;
-                Left = dragBounds.Left + dx; Top = dragBounds.Top + dy;
-            }
-            else
-            {
-                var bounds = ReaderGeometry.Resize(dragBounds, edge, dx, dy);
-                Left = bounds.Left; Top = bounds.Top; Width = bounds.Width; Height = bounds.Height;
-                app.Store.Preferences.FontSize = bounds.FontSize;
-                ApplyAppearance(false);
-                if (resizeAnchor != null) QueueAnchor(resizeAnchor);
-            }
+            UpdateDrag(ScreenPoint(e));
             e.Handled = true;
             return;
         }
@@ -260,13 +298,14 @@ public sealed class ReaderWindow : Window
 
     private void HandleMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (dragging) { dragging = false; ReleaseMouseCapture(); resizeAnchor = null; SaveBounds(); app.SaveSoon(); }
+        if (dragging) { UpdateDrag(ScreenPoint(e)); EndDrag(); }
         e.Handled = true;
     }
 
     private void Wheel(object sender, MouseWheelEventArgs e)
     {
         e.Handled = true;
+        if (resizeAnchor is not null) return;
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             app.Store.Preferences.FontSize = Math.Clamp(app.Store.Preferences.FontSize + e.Delta / 120.0, 8, 72);
@@ -277,6 +316,7 @@ public sealed class ReaderWindow : Window
 
     public void SaveBounds()
     {
+        if (resizeAnchor is not null) return;
         var p = app.Store.Preferences;
         p.Left = Left; p.Top = Top; p.Width = Width; p.Height = Height;
     }
