@@ -4,7 +4,7 @@
 
 ## 运行
 
-下载 [Windows 便携版 v0.1.0](https://github.com/Piz0922/moyu-reader/releases/download/v0.1.0/MoyuReader-v0.1.0-win-x64.zip)，或前往 [Releases](https://github.com/Piz0922/moyu-reader/releases) 查看发布版本。适用于 Windows 10 / 11 x64。
+下载 [Windows 便携版 v0.1.1](https://github.com/Piz0922/moyu-reader/releases/download/v0.1.1/MoyuReader-v0.1.1-win-x64.zip)，或前往 [Releases](https://github.com/Piz0922/moyu-reader/releases) 查看发布版本。适用于 Windows 10 / 11 x64。
 
 解压便携版，双击 `MoyuReader.exe`。请保留同目录的运行文件，不要只移动 EXE。无需安装 .NET 或开发环境。
 

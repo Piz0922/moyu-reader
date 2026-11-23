@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
@@ -19,7 +19,7 @@ try {
     New-Item -ItemType Directory -Path $portableStage -Force | Out-Null
     Get-ChildItem -LiteralPath $releaseDirectory | Where-Object { $_.Name -ne 'resources' -and $_.Name -ne 'validation' -and $_.Name -notlike '*fixture*' -and $_.Name -notlike 'smoke-*' } | Copy-Item -Destination $portableStage -Recurse
     foreach ($subdirectory in @('books', 'config', 'progress')) { New-Item -ItemType Directory -Path (Join-Path $portableStage "resources/$subdirectory") -Force | Out-Null }
-    Compress-Archive -Path $portableStage -DestinationPath 'dist/MoyuReader-v0.1.0-win-x64.zip' -Force
+    Compress-Archive -Path $portableStage -DestinationPath 'dist/MoyuReader-v0.1.1-win-x64.zip' -Force
 
     $sourceStage = Join-Path $packageStage 'MoyuReader-source'
     New-Item -ItemType Directory -Path $sourceStage -Force | Out-Null
@@ -33,7 +33,7 @@ try {
         }
     }
     foreach ($file in @('README.md', 'GLOSSARY.md', '.gitignore', '.gitattributes')) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $sourceStage }
-    Compress-Archive -Path $sourceStage -DestinationPath 'dist/MoyuReader-v0.1.0-source.zip' -Force
-    Get-FileHash 'dist/MoyuReader-v0.1.0-win-x64.zip', 'dist/MoyuReader-v0.1.0-source.zip' -Algorithm SHA256 | Format-Table -AutoSize
+    Compress-Archive -Path $sourceStage -DestinationPath 'dist/MoyuReader-v0.1.1-source.zip' -Force
+    Get-FileHash 'dist/MoyuReader-v0.1.1-win-x64.zip', 'dist/MoyuReader-v0.1.1-source.zip' -Algorithm SHA256 | Format-Table -AutoSize
 }
 finally { Pop-Location }
